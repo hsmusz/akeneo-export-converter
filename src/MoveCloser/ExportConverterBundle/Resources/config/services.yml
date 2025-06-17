@@ -41,6 +41,7 @@ services:
             - '@movecloser.export_converter_bundle.attribute_map'
             - '%pim_job_product_batch_size%'
             - '@akeneo_batch.job.job_stopper'
+            - '@movecloser.export_converter_bundle.templates'
 
     MoveCloser\ExportConverterBundle\Command\RunJobCommand:
         tags: [ 'console.command ' ]

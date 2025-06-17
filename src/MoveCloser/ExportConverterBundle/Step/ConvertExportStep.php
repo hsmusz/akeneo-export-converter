@@ -15,12 +15,9 @@ use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 class ConvertExportStep extends ItemStep
 {
-    private static array $templateMap = [
-        // override me
-    ];
-
     protected string $datetimeFormat = 'Y-m-d_H-i-s';
     private AttributeMap $attributeMap;
+    private array $templateMap;
 
     public function __construct(
         string $name,
@@ -32,11 +29,13 @@ class ConvertExportStep extends ItemStep
         AttributeMap $attributeMap,
         int $batchSize = 100,
         JobStopper $jobStopper = null,
+        array $templateMap = [],
 
     ) {
         parent::__construct($name, $eventDispatcher, $jobRepository, $reader, $processor, $writer, $batchSize, $jobStopper);
 
         $this->attributeMap = $attributeMap;
+        $this->templateMap = $templateMap;
     }
 
     public function doExecute(StepExecution $stepExecution)
@@ -80,7 +79,7 @@ class ConvertExportStep extends ItemStep
 
     private function matchConverter(string $file): ?string
     {
-        foreach (static::$templateMap as $tpl => $class) {
+        foreach ($this->templateMap as $tpl => $class) {
             if (!str_starts_with(basename($file), $tpl)) {
                 continue;
             }
