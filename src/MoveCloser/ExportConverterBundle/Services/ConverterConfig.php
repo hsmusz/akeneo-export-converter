@@ -5,15 +5,30 @@ namespace MoveCloser\ExportConverterBundle\Services;
 use Kernel;
 use Symfony\Component\HttpFoundation\Request;
 
-class AttributeMap
+class ConverterConfig
 {
     public function __construct(
         private readonly Kernel $kernel,
         private readonly array $attributes,
+        private readonly array $languages,
+        private readonly array $templatesMap,
     ) {
     }
 
-    public function generate(): array
+    public function matchConverter(string $file): ?string
+    {
+        foreach ($this->templatesMap as $tpl => $class) {
+            if (!str_starts_with(basename($file), $tpl)) {
+                continue;
+            }
+
+            return $class;
+        }
+
+        return null;
+    }
+
+    public function generateMap(): array
     {
         // @todo: add cache
 
@@ -33,6 +48,11 @@ class AttributeMap
         }
 
         return $map;
+    }
+
+    public function languages(): array
+    {
+        return $this->languages;
     }
 
     private function generateSelectAttributeMapApiCall($attribute, $limit, $page = 1)

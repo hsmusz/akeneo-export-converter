@@ -18,7 +18,7 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 class RunJobCommand extends Command
 {
-    protected static $defaultName = 'app:run-job';
+    protected static $defaultName = 'converter:run-job';
 
     public function __construct(
         private readonly JobInstanceRepository $jobInstanceRepository,
@@ -27,15 +27,22 @@ class RunJobCommand extends Command
         parent::__construct();
     }
 
-    protected function configure(): void
+    protected function configure()
     {
         $this
-            ->addArgument('jobCode', InputArgument::REQUIRED, 'Job code to run');
+            ->setName('converter:run-job')
+            ->setDescription('Run conversion job')
+            ->addArgument('job_code', InputArgument::REQUIRED, 'Please enter job_code')
+            ->setHelp(
+                <<<EOT
+                    The <info>%command.name%</info>command run converions job.
+EOT
+            );
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $jobCode = $input->getArgument('jobCode');
+        $jobCode = $input->getArgument('job_code');
         /** @var \Akeneo\Tool\Component\Batch\Model\JobInstance $jobInstance */
         $jobInstance = $this->jobInstanceRepository->findOneByIdentifier($jobCode);
 

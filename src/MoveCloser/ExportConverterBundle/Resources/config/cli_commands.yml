@@ -1,0 +1,8 @@
+services:
+    MoveCloser\ExportConverterBundle\Command\RunJobCommand:
+        tags:
+            - { name: 'console.command' }
+        arguments:
+            - '@akeneo_batch.job.job_instance_repository'
+            - '@movecloser.export_converter_bundle.launcher.synchronous_job_launcher'
+

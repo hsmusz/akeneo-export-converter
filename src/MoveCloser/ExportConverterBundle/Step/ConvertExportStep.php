@@ -10,14 +10,13 @@ use Akeneo\Tool\Component\Batch\Job\JobRepositoryInterface;
 use Akeneo\Tool\Component\Batch\Job\JobStopper;
 use Akeneo\Tool\Component\Batch\Model\StepExecution;
 use Akeneo\Tool\Component\Batch\Step\ItemStep;
-use MoveCloser\ExportConverterBundle\Services\AttributeMap;
+use MoveCloser\ExportConverterBundle\Services\ConverterConfig;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
 
 class ConvertExportStep extends ItemStep
 {
     protected string $datetimeFormat = 'Y-m-d_H-i-s';
-    private AttributeMap $attributeMap;
-    private array $templateMap;
+    private ConverterConfig $config;
 
     public function __construct(
         string $name,
@@ -26,37 +25,38 @@ class ConvertExportStep extends ItemStep
         ItemReaderInterface $reader,
         ItemProcessorInterface $processor,
         ItemWriterInterface $writer,
-        AttributeMap $attributeMap,
+        ConverterConfig $config,
         int $batchSize = 100,
         JobStopper $jobStopper = null,
-        array $templateMap = [],
 
     ) {
         parent::__construct($name, $eventDispatcher, $jobRepository, $reader, $processor, $writer, $batchSize, $jobStopper);
 
-        $this->attributeMap = $attributeMap;
-        $this->templateMap = $templateMap;
+        $this->config = $config;
     }
 
     public function doExecute(StepExecution $stepExecution)
     {
+
         parent::doExecute($stepExecution);
 
         $file = $this->getPath();
-        $convertClass = $this->matchConverter($file);
+        $convertClass = $this->config->matchConverter($file);
 
         if (!file_exists($file) || !$convertClass) {
             return;
         }
 
-        /** @var \MoveCloser\ExportConverterBundle\ExportTemplates\BaseTemplate $converter */
-        $converter = new $convertClass();
-        $converter->loadFile($file);
-        $converter->setSelectAttributeMap($this->attributeMap->generate());
-        $converter->setWriter($this->getWriter());
-        $converter->convert();
-        $converter->saveFile($file);
-        // @todo: remove excess product images based on $converter->getImagesToSave()
+        try {
+            /** @var \MoveCloser\ExportConverterBundle\ExportTemplates\BaseTemplate $converter */
+            $converter = $convertClass::make($this->config, $this->writer, $file);
+            $converter->convert();
+            $converter->saveFile($file);
+            // @todo: remove excess products images
+        } catch (\Throwable $e) {
+            dump($e->getMessage());
+            throw new \RuntimeException($e->getMessage());
+        }
     }
 
     private function getPath(): string
@@ -75,18 +75,5 @@ class ConvertExportStep extends ItemStep
         }
 
         return $filePath;
-    }
-
-    private function matchConverter(string $file): ?string
-    {
-        foreach ($this->templateMap as $tpl => $class) {
-            if (!str_starts_with(basename($file), $tpl)) {
-                continue;
-            }
-
-            return $class;
-        }
-
-        return null;
     }
 }

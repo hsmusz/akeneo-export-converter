@@ -5,22 +5,17 @@ declare(strict_types=1);
 namespace MoveCloser\ExportConverterBundle\ExportTemplates;
 
 use Akeneo\Tool\Component\Batch\Item\ItemWriterInterface;
+use MoveCloser\ExportConverterBundle\Services\ConverterConfig;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 abstract class BaseTemplate
 {
-    protected array $availableLangs = [
-        'pl_PL',
-        'en_GB',
-        'es_MX',
-        'de_DE',
-        'fr_FR',
-    ];
-    protected string $detectedLang;
-    protected bool $imagesFromParent = false;
-    protected array $imagesToSave = [];
+    protected array $availableLangs = [];
+    protected ?string $detectedLang = null;
+//    protected bool $imagesFromParent = false;
+//    protected array $imagesToSave = [];
     protected array $productGroups = [];
     protected array $selectAttributeMap;
     protected int|string|null $sheetName = null;
@@ -32,17 +27,33 @@ abstract class BaseTemplate
     protected ?Worksheet $worksheet;
     protected ?ItemWriterInterface $writer;
 
+    public static function make(ConverterConfig $config, ItemWriterInterface $writer, $file): static
+    {
+        $converter = new static();
+        $converter->writer = $writer;
+        $converter->availableLangs = $config->languages();
+        $converter->selectAttributeMap = $config->generateMap();
+        $converter->loadFile($file);
+
+        return $converter;
+    }
+
     public function convert(): void
     {
         $this->resolveWorksheet();
         $rows = $this->prepareRows();
 
         $i = $this->startingRow;
-        foreach ($rows as $sourceRow) {
-            $this->detectImagesToSave($this->sourceColumnMap, $sourceRow);
-            $this->detectProductGroups($this->sourceColumnMap, $sourceRow);
+        foreach ($rows as $lp => $sourceRow) {
+//            $this->detectImagesToSave($this->sourceColumnMap, $sourceRow);
+//            $this->detectProductGroups($this->sourceColumnMap, $sourceRow);
+
+            if ($this->shouldSkipRow($sourceRow)) {
+                continue;
+            }
 
             foreach ($this->sheetsColumnMap() as $destinationCol => $sourceColumnName) {
+                $sourceColNumber = $this->sourceColumnMap[$sourceColumnName];
                 $this->writeRow(
                     [$destinationCol, $i],
                     $sourceColumnName,
@@ -56,14 +67,26 @@ abstract class BaseTemplate
 
             $i++;
         }
-
-        $this->correctProductGroupsImages();
+//        $this->correctProductGroupsImages();
     }
 
-    public function getImagesToSave(): array
+    protected function extractColumnFromSource(int $columnIndex, array $row): mixed
     {
-        return $this->imagesToSave;
+        $checkInColumn = $this->sheetsColumnMap()[$columnIndex];
+        $column = $this->sourceColumnMap[$checkInColumn];
+
+        return $row[$column];
     }
+
+    protected function shouldSkipRow(array $currentRow): bool
+    {
+        return false;
+    }
+
+//    public function getImagesToSave(): array
+//    {
+//        return $this->imagesToSave;
+//    }
 
     public function loadFile($file): void
     {
@@ -75,6 +98,11 @@ abstract class BaseTemplate
     {
         $writer = IOFactory::createWriter($this->spreadsheet, 'Xlsx');
         $writer->save(dirname($file) . '/' . basename($file));
+    }
+
+    public function setAvailableLangs(array $langs): void
+    {
+        $this->availableLangs = $langs;
     }
 
     public function setSelectAttributeMap($selectAttributeMap): void
@@ -130,6 +158,8 @@ abstract class BaseTemplate
                 }
             }
         }
+
+        throw new \Exception('Language for template conversion not detected. Available locales: ' . implode(', ', $this->availableLangs));
     }
 
     protected function detectProductGroups(array $columnMap, $row): void
@@ -160,12 +190,12 @@ abstract class BaseTemplate
     protected function resolveWorksheet(): void
     {
         if (is_int($this->sheetName)) {
-            $this->worksheet = $this->spreadsheet->getSheet($this->sheetName);
+            $this->spreadsheet->setActiveSheetIndex($this->sheetName);
         } elseif (is_string($this->sheetName)) {
-            $this->worksheet = $this->spreadsheet->getSheetByName($this->sheetName);
-        } else {
-            $this->worksheet = $this->spreadsheet->getActiveSheet();
+            $this->spreadsheet->setActiveSheetIndexByName($this->sheetName);
         }
+
+        $this->worksheet = $this->spreadsheet->getActiveSheet();
     }
 
     protected function selectAttribute($value, $col, $row)
@@ -188,6 +218,11 @@ abstract class BaseTemplate
     }
 
     abstract protected function sheetsColumnMap(): array;
+
+    protected function stripTagsAndBr2Nl(?string $input): string
+    {
+        return strip_tags(preg_replace('/<br\s?\/?>/ius', "\n", htmlspecialchars_decode($input ?? '')));
+    }
 
     protected function writeRow(array $coords, string $sourceColumnName, mixed $value): void
     {

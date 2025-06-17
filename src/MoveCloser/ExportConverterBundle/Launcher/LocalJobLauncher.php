@@ -34,7 +34,8 @@ class LocalJobLauncher implements JobLauncherInterface
         private JobExecutionRepository $jobExecutionRepository,
         private LoggerInterface $logger,
         private JobRegistry $jobRegistry,
-        private string $projectDir
+        private string $projectDir,
+        private string $user
     ) {
     }
 
@@ -47,7 +48,7 @@ class LocalJobLauncher implements JobLauncherInterface
     {
         $job = $this->jobRegistry->get($jobInstance->getJobName());
         $jobExecution = $this->jobRepository->createJobExecution($job, $jobInstance, new JobParameters($jobParameters));
-        $jobExecution->setUser('huberts2');
+        $jobExecution->setUser($this->user);
 
         $this->jobRepository->updateJobExecution($jobExecution);
 
