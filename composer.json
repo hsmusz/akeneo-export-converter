@@ -1,0 +1,17 @@
+{
+  "name": "movecloser/akeneto-export-converter",
+  "description": "Webkul Magento2 Akeneo Connector",
+  "version": "4.4.0",
+  "type": "symfony-bundle",
+  "require": {
+    "php": "8.1.*",
+    "akeneo/pim-community-dev": "^7.0.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "MoveCloser\\ExportConverterBundle\\": "src/MoveCloser/ExportConverterBundle/"
+    }
+  },
+  "minimum-stability": "stable",
+  "prefer-stable": true
+}
