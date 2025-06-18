@@ -147,13 +147,14 @@ abstract class BaseTemplate
 
     /**
      * Extracts a value from the source row by column index.
+     * If integer is used, assume the index needs to be mapped based on ColumnMap
      *
      * This method uses the column mapping to find the correct source column,
      * then retrieves the corresponding value from the row array.
      */
-    protected function extractValueFromSource(int $columnIndex, array $row): mixed
+    protected function extractValueFromSource(int|string $columnIndex, array $row): mixed
     {
-        $column = $this->sheetsColumnMap()[$columnIndex];
+        $column = is_int($columnIndex) ? $this->sheetsColumnMap()[$columnIndex] : $columnIndex;
 
         return $row[$this->sourceColumnMap[$column]];
     }
@@ -182,16 +183,14 @@ abstract class BaseTemplate
      * For "select" (dropdown) attributes, returns a translated value if one exists;
      * if not, returns the original, untranslated value.
      *
+     * Allows empty values, as they might be mapped as 0 index or empty default value.
+     *
      * This method handles both single and multiple (comma-separated) attribute values,
      * applying mapping logic as needed. It is used to transform attribute data before export.
      */
     protected function selectAttribute(mixed $value, int $col, string $separator = ',')
     {
-        if (empty($value)) {
-            return $value;
-        }
-
-        if (str_contains($value, ',')) {
+        if (is_string($value) && str_contains($value, ',')) {
             $attributes = explode(',', $value);
             $attributesLabeled = [];
             foreach ($attributes as $attribute) {

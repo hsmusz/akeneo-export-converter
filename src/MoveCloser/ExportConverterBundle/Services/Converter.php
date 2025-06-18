@@ -25,7 +25,7 @@ class Converter
     /**
      * Retrieves a mapped or translated attribute value based on the provided column identifier, value, and language.
      */
-    public function getMappedAttribute($column, $value, $language): mixed
+    public function getMappedAttribute(string $column, mixed $value, string $language): mixed
     {
         return $this->attributes->getMappedAttribute($column, $value, $language);
     }

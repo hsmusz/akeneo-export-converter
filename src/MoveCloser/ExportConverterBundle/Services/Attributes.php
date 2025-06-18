@@ -65,31 +65,31 @@ class Attributes
      * value, and language code. Implements strict validation at each mapping step and returns the original value
      * if any mapping or translation is missing.
      */
-    public function getMappedAttribute($columnIndex, mixed $value, string $language): mixed
+    public function getMappedAttribute(string $column, mixed $value, string $language): mixed
     {
-        if (!$this->has($columnIndex)) {
+        if (!$this->has($column)) {
             echo sprintf(
                     "- Err0r: cant find labels definitions for field [%s].\n",
-                    $columnIndex
+                    $column
                 ) . PHP_EOL;
 
             return $value;
         }
 
-        if (!$this->has($columnIndex, $value)) {
+        if (!$this->has($column, $value)) {
             echo sprintf(
                     "- Err0r: cant find label for field [%s] and value [%s].\n",
-                    $columnIndex,
+                    $column,
                     $value
                 ) . PHP_EOL;
 
             return $value;
         }
 
-        if (!$this->has($columnIndex, $value, $language)) {
+        if (!$this->has($column, $value, $language)) {
             echo sprintf(
                     "- Err0r: cant find label translation for field [%s], value [%s] and lang [%s].\n",
-                    $columnIndex,
+                    $column,
                     $value,
                     $language
                 ) . PHP_EOL;
@@ -97,7 +97,7 @@ class Attributes
             return $value;
         }
 
-        return $this->map[$columnIndex][$value][$language];
+        return $this->map[$column][$value][$language];
     }
 
     /**
