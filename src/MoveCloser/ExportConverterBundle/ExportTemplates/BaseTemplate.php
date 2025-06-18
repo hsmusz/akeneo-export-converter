@@ -15,6 +15,7 @@ abstract class BaseTemplate
 {
     protected Converter $converter;
     protected int $counter = 0;
+    protected array $dataTypesMap = [];
     protected ?string $detectedCurrency = null;
     protected ?string $detectedLang = null;
     protected int|string|null $sheetName = null;
@@ -132,6 +133,19 @@ abstract class BaseTemplate
     abstract protected function columnConvertMap(): array;
 
     /**
+     * Allows for the extension of column data type mappings.
+     *
+     * By default, this mapping includes support for 'ean-{locale}' and 'sku' column types.
+     * Implementers can override or extend this mapping to accommodate additional or custom data types as required.
+     *
+     * @return array<string, \PhpOffice\PhpSpreadsheet\Cell\DataType::<TYPE>> Associative array mapping column names to data types.
+     */
+    protected function extendDataTypesMap(): array
+    {
+        return [];
+    }
+
+    /**
      * Extracts a value from the source row by column index.
      *
      * This method uses the column mapping to find the correct source column,
@@ -142,21 +156,6 @@ abstract class BaseTemplate
         $column = $this->sheetsColumnMap()[$columnIndex];
 
         return $row[$this->sourceColumnMap[$column]];
-    }
-
-    /**
-     * Determines the data type for a specified column.
-     *
-     * Child classes must implement this method to specify the data type
-     * for each column, which may be used for formatting or validation during export.
-     */
-    protected function getDataType($col): ?string
-    {
-        $map = [
-            'ean-' . $this->detectedLang => DataType::TYPE_STRING,
-        ];
-
-        return $map[$col] ?? null;
     }
 
     /**
@@ -243,6 +242,30 @@ abstract class BaseTemplate
                     $this->getDataType($sourceColumnName)
                 );
         }
+    }
+
+    /**
+     * Determines the data type for a specified column.
+     *
+     * Child classes must implement this method to specify the data type
+     * for each column, which may be used for formatting or validation during export.
+     */
+    private function getDataType(string $col): ?string
+    {
+        if (empty($this->dataTypesMap)) {
+            $map = [
+                'sku' => DataType::TYPE_STRING,
+                'ean-' . $this->detectedLang => DataType::TYPE_STRING,
+            ];
+
+            foreach ($this->extendDataTypesMap() as $name => $type) {
+                $map[strtolower($name)] = $type;
+            }
+
+            $this->dataTypesMap = $map;
+        }
+
+        return $this->dataTypesMap[strtolower($col)] ?? null;
     }
 
     /**
