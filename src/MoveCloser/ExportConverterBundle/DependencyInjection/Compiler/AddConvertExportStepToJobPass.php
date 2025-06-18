@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MoveCloser\ExportConverterBundle\DependencyInjection\Compiler;
 
 use Symfony\Component\DependencyInjection\Compiler\CompilerPassInterface;
@@ -8,7 +10,7 @@ use Symfony\Component\DependencyInjection\Reference;
 
 class AddConvertExportStepToJobPass implements CompilerPassInterface
 {
-    public function process(ContainerBuilder $container)
+    public function process(ContainerBuilder $container): void
     {
         $jobServiceId = 'pim_connector.job.xlsx_product_export';
 

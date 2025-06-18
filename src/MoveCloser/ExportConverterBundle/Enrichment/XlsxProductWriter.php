@@ -11,7 +11,7 @@ use Akeneo\Tool\Component\Connector\Writer\File\WrittenFileInfo;
 class XlsxProductWriter extends ProductWriter
 {
     /**
-     * Allow adding external files to process
+     * Allow adding external files to the export process
      */
     public function addWrittenFile($flatFile): void
     {

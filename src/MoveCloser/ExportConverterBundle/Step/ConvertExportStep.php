@@ -10,13 +10,15 @@ use Akeneo\Tool\Component\Batch\Job\JobRepositoryInterface;
 use Akeneo\Tool\Component\Batch\Job\JobStopper;
 use Akeneo\Tool\Component\Batch\Model\StepExecution;
 use Akeneo\Tool\Component\Batch\Step\ItemStep;
-use MoveCloser\ExportConverterBundle\Services\ConverterConfig;
+use MoveCloser\ExportConverterBundle\Services\Converter;
+use RuntimeException;
 use Symfony\Component\EventDispatcher\EventDispatcherInterface;
+use Throwable;
 
 class ConvertExportStep extends ItemStep
 {
     protected string $datetimeFormat = 'Y-m-d_H-i-s';
-    private ConverterConfig $config;
+    private Converter $converter;
 
     public function __construct(
         string $name,
@@ -25,38 +27,48 @@ class ConvertExportStep extends ItemStep
         ItemReaderInterface $reader,
         ItemProcessorInterface $processor,
         ItemWriterInterface $writer,
-        ConverterConfig $config,
+        Converter $converter,
         int $batchSize = 100,
         JobStopper $jobStopper = null,
 
     ) {
         parent::__construct($name, $eventDispatcher, $jobRepository, $reader, $processor, $writer, $batchSize, $jobStopper);
 
-        $this->config = $config;
+        $this->converter = $converter;
     }
 
+    /**
+     * {@inheritDoc}
+     */
     public function doExecute(StepExecution $stepExecution)
     {
-
         parent::doExecute($stepExecution);
 
         $file = $this->getPath();
-        $convertClass = $this->config->matchConverter($file);
+        $convertClass = $this->converter->matchConverter($file);
 
         if (!file_exists($file) || !$convertClass) {
             return;
         }
 
-        try {
-            /** @var \MoveCloser\ExportConverterBundle\ExportTemplates\BaseTemplate $converter */
-            $converter = $convertClass::make($this->config, $this->writer, $file);
-            $converter->convert();
-            $converter->saveFile($file);
-            // @todo: remove excess products images
-        } catch (\Throwable $e) {
-            dump($e->getMessage());
-            throw new \RuntimeException($e->getMessage());
+        $parameters = $this->stepExecution->getJobParameters();
+        $locales = $parameters->get('filters')['structure']['locales'];
+
+        foreach ($locales as $locale) {
+            try {
+                /** @var \MoveCloser\ExportConverterBundle\ExportTemplates\BaseTemplate $convertClass */
+                $template = $convertClass::make($this->converter, $this->writer, $locale, $file);
+                $template->convert();
+                $template->saveFile($file, $locale);
+                // @todo: remove excess products images
+            } catch (Throwable $e) {
+                dump($e->getMessage());
+                throw new RuntimeException($e->getMessage());
+            }
         }
+
+        // remove original export data
+        unlink($file);
     }
 
     private function getPath(): string

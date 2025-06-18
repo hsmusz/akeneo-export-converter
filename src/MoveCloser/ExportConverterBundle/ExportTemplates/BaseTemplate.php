@@ -5,19 +5,18 @@ declare(strict_types=1);
 namespace MoveCloser\ExportConverterBundle\ExportTemplates;
 
 use Akeneo\Tool\Component\Batch\Item\ItemWriterInterface;
-use MoveCloser\ExportConverterBundle\Services\ConverterConfig;
+use MoveCloser\ExportConverterBundle\Services\Converter;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 abstract class BaseTemplate
 {
-    protected array $availableLangs = [];
+    protected Converter $converter;
+    protected int $counter = 0;
+    protected ?string $detectedCurrency = null;
     protected ?string $detectedLang = null;
-//    protected bool $imagesFromParent = false;
-//    protected array $imagesToSave = [];
-    protected array $productGroups = [];
-    protected array $selectAttributeMap;
     protected int|string|null $sheetName = null;
     protected array $sourceColumnMap;
     protected Spreadsheet $spreadsheet;
@@ -27,33 +26,41 @@ abstract class BaseTemplate
     protected ?Worksheet $worksheet;
     protected ?ItemWriterInterface $writer;
 
-    public static function make(ConverterConfig $config, ItemWriterInterface $writer, $file): static
+    /**
+     * Creates a new template instance and prepares it for conversion.
+     *
+     * This static factory method initializes the template with a converter and writer, and loads the specified file.
+     * It is the recommended way to instantiate and prepare a template for further processing.
+     */
+    public static function make(Converter $converter, ItemWriterInterface $writer, string $locale, string $file): static
     {
-        $converter = new static();
-        $converter->writer = $writer;
-        $converter->availableLangs = $config->languages();
-        $converter->selectAttributeMap = $config->generateMap();
-        $converter->loadFile($file);
+        $template = new static();
+        $template->converter = $converter;
+        $template->writer = $writer;
+        $template->detectedLang = $locale;
+        $template->loadFile($file);
 
-        return $converter;
+        return $template;
     }
 
+    /**
+     * Performs the conversion of spreadsheet data according to the template.
+     *
+     * This method reads rows from the source spreadsheet, processes them according to the column mapping,
+     * and writes the results to the template worksheet. It skips rows that should be excluded as defined by
+     * the template implementation.
+     */
     public function convert(): void
     {
-        $this->resolveWorksheet();
         $rows = $this->prepareRows();
 
         $i = $this->startingRow;
-        foreach ($rows as $lp => $sourceRow) {
-//            $this->detectImagesToSave($this->sourceColumnMap, $sourceRow);
-//            $this->detectProductGroups($this->sourceColumnMap, $sourceRow);
-
+        foreach ($rows as $sourceRow) {
             if ($this->shouldSkipRow($sourceRow)) {
                 continue;
             }
 
             foreach ($this->sheetsColumnMap() as $destinationCol => $sourceColumnName) {
-                $sourceColNumber = $this->sourceColumnMap[$sourceColumnName];
                 $this->writeRow(
                     [$destinationCol, $i],
                     $sourceColumnName,
@@ -66,139 +73,120 @@ abstract class BaseTemplate
             }
 
             $i++;
+            $this->counter++;
         }
-//        $this->correctProductGroupsImages();
     }
 
-    protected function extractColumnFromSource(int $columnIndex, array $row): mixed
-    {
-        $checkInColumn = $this->sheetsColumnMap()[$columnIndex];
-        $column = $this->sourceColumnMap[$checkInColumn];
-
-        return $row[$column];
-    }
-
-    protected function shouldSkipRow(array $currentRow): bool
-    {
-        return false;
-    }
-
-//    public function getImagesToSave(): array
-//    {
-//        return $this->imagesToSave;
-//    }
-
-    public function loadFile($file): void
+    /**
+     * Loads the template and source spreadsheet files.
+     *
+     * This method is responsible for initializing the main and source spreadsheet objects,
+     * which will be used for data extraction and transformation during the conversion process.
+     */
+    public function loadFile(string $file): void
     {
         $this->spreadsheet = IOFactory::load($this->templateFile);
         $this->spreadsheetSource = IOFactory::load($file);
     }
 
-    public function saveFile($file): void
+    /**
+     * Saves the processed spreadsheet data to a file.
+     *
+     * After conversion, this method writes the modified spreadsheet to a new file,
+     * preserving the structure and data as defined by the template.
+     */
+    public function saveFile(string $file, string $locale): void
     {
+        $path = dirname($file) . '/' . $locale . '_' . basename($file);
         $writer = IOFactory::createWriter($this->spreadsheet, 'Xlsx');
-        $writer->save(dirname($file) . '/' . basename($file));
+        $writer->save($path);
+        $this->writer->addWrittenFile($path);
     }
 
-    public function setAvailableLangs(array $langs): void
+    /**
+     * Converts a value from the source row using custom mapping logic.
+     *
+     * This method checks if the source column exists in the mapping, and if so,
+     * applies a custom converter function if defined for the destination column.
+     * This allows for flexible transformation of data during the export process.
+     */
+    protected function columnConvert(int $col, string $column, array $row): mixed
     {
-        $this->availableLangs = $langs;
-    }
-
-    public function setSelectAttributeMap($selectAttributeMap): void
-    {
-        $this->selectAttributeMap = $selectAttributeMap;
-    }
-
-    public function setWriter(?ItemWriterInterface $writer): void
-    {
-        $this->writer = $writer;
-    }
-
-    protected function changeWeight($value, $col, $row, $num)
-    {
-        if (empty($value) || empty($num)) {
-            return $value;
-        }
-
-        return $value * $num;
-    }
-
-    protected function cleanText($value): string
-    {
-        $pattern = '/&nbsp;/';
-        $replacement = '';
-        $result = preg_replace($pattern, $replacement, $value ?? '');
-
-        return strip_tags($result ?? '');
-    }
-
-    protected function columnConvert(int $col, string $sourceColumnName, array $row): mixed
-    {
-        if (!array_key_exists($sourceColumnName, $this->sourceColumnMap)) {
+        if (!array_key_exists($column, $this->sourceColumnMap)) {
             return null;
         }
 
-        $val = $row[$this->sourceColumnMap[$sourceColumnName]];
+        $val = $row[$this->sourceColumnMap[$column]];
         $map = $this->columnConvertMap();
 
         return isset($map[$col]) ? $map[$col]($val, $col, $row) : $val;
     }
 
+    /**
+     * Provides a mapping of custom converter functions for specific columns.
+     *
+     * Child classes must implement this method to define how values are converted
+     * for each destination column. The mapping should return callables that process
+     * the value, column, and row as needed.
+     */
     abstract protected function columnConvertMap(): array;
 
-    protected function detectLang(array $sourceColumnMap): void
+    /**
+     * Extracts a value from the source row by column index.
+     *
+     * This method uses the column mapping to find the correct source column,
+     * then retrieves the corresponding value from the row array.
+     */
+    protected function extractValueFromSource(int $columnIndex, array $row): mixed
     {
-        foreach ($sourceColumnMap as $column => $index) {
-            foreach ($this->availableLangs as $lang) {
-                if (str_contains($column, $lang)) {
-                    $this->detectedLang = $lang;
+        $column = $this->sheetsColumnMap()[$columnIndex];
 
-                    return;
-                }
-            }
-        }
-
-        throw new \Exception('Language for template conversion not detected. Available locales: ' . implode(', ', $this->availableLangs));
+        return $row[$this->sourceColumnMap[$column]];
     }
 
-    protected function detectProductGroups(array $columnMap, $row): void
+    /**
+     * Determines the data type for a specified column.
+     *
+     * Child classes must implement this method to specify the data type
+     * for each column, which may be used for formatting or validation during export.
+     */
+    protected function getDataType($col): ?string
     {
-        if (isset($columnMap['parent']) && !empty($row[$columnMap['parent']])) {
-            $this->productGroups[$row[$columnMap['parent']]][] = $row[$columnMap['sku']];
-        }
+        $map = [
+            'ean-' . $this->detectedLang => DataType::TYPE_STRING,
+        ];
+
+        return $map[$col] ?? null;
     }
 
-    abstract protected function getDataType(string $col): ?string;
-
-    protected function isHeaderRow(array $sourceRow): bool
-    {
-        return $sourceRow[0] === 'sku' || $sourceRow[1] === 'sku';
-    }
-
+    /**
+     * Prepares and processes rows from the source spreadsheet.
+     *
+     * This method reads the active sheet, extracts header rows to build a column map,
+     * detects currency, resolves the worksheet, and returns the data rows.
+     */
     protected function prepareRows(): array
     {
         $rows = $this->spreadsheetSource->getActiveSheet()->toArray();
         $headerRows = array_shift($rows);
         $this->sourceColumnMap = array_flip($headerRows);
         $this->sourceColumnMap[''] = null;
-        $this->detectLang($this->sourceColumnMap);
+
+        $this->detectedCurrency = $this->converter->detectCurrency($this->detectedLang);
+
+        $this->resolveWorksheet();
 
         return $rows;
     }
 
-    protected function resolveWorksheet(): void
-    {
-        if (is_int($this->sheetName)) {
-            $this->spreadsheet->setActiveSheetIndex($this->sheetName);
-        } elseif (is_string($this->sheetName)) {
-            $this->spreadsheet->setActiveSheetIndexByName($this->sheetName);
-        }
-
-        $this->worksheet = $this->spreadsheet->getActiveSheet();
-    }
-
-    protected function selectAttribute($value, $col, $row)
+    /**
+     * For "select" (dropdown) attributes, returns a translated value if one exists;
+     * if not, returns the original, untranslated value.
+     *
+     * This method handles both single and multiple (comma-separated) attribute values,
+     * applying mapping logic as needed. It is used to transform attribute data before export.
+     */
+    protected function selectAttribute(mixed $value, int $col, string $separator = ',')
     {
         if (empty($value)) {
             return $value;
@@ -208,22 +196,40 @@ abstract class BaseTemplate
             $attributes = explode(',', $value);
             $attributesLabeled = [];
             foreach ($attributes as $attribute) {
-                $attributesLabeled[] = $this->selectAttribute($attribute, $col, $row);
+                $attributesLabeled[] = $this->selectAttribute($attribute, $col);
             }
 
-            return implode(',', $attributesLabeled);
+            return implode($separator, $attributesLabeled);
         }
 
         return $this->getMappedAttribute($col, $value);
     }
 
+    /**
+     * Maps source columns to destination columns.
+     *
+     * Child classes must implement this method to define how source columns
+     * are mapped to destination columns in the export template.
+     */
     abstract protected function sheetsColumnMap(): array;
 
-    protected function stripTagsAndBr2Nl(?string $input): string
+    /**
+     * Determines whether a row should be skipped during conversion.
+     *
+     * This method can be overridden by child classes to implement custom logic
+     * for excluding certain rows from the export. By default, no rows are skipped.
+     */
+    protected function shouldSkipRow(array $currentRow): bool
     {
-        return strip_tags(preg_replace('/<br\s?\/?>/ius', "\n", htmlspecialchars_decode($input ?? '')));
+        return false;
     }
 
+    /**
+     * Writes a value to the specified cell in the worksheet.
+     *
+     * This method sets the value and data type (if specified) for the given cell coordinates,
+     * ensuring the exported data is formatted correctly according to the template requirements.
+     */
     protected function writeRow(array $coords, string $sourceColumnName, mixed $value): void
     {
         $this->worksheet
@@ -239,40 +245,33 @@ abstract class BaseTemplate
         }
     }
 
+    /**
+     * Retrieves a mapped attribute value for a column.
+     *
+     * This internal method delegates to the converter to map an attribute value
+     * for the specified column, using the detected language if available.
+     */
     private function getMappedAttribute(int $col, mixed $value): mixed
     {
-        $colMap = $this->sheetsColumnMap();
+        $column = $this->sheetsColumnMap()[$col];
 
-        if (!isset($this->selectAttributeMap[$colMap[$col]])) {
-            echo sprintf(
-                    "- Err0r: cant find labels definitions for field [%s].\n",
-                    $colMap[$col]
-                ) . PHP_EOL;
+        return $this->converter->getMappedAttribute($column, $value, $this->detectedLang);
+    }
 
-            return $value;
+    /**
+     * Resolves and sets the active worksheet for export.
+     *
+     * This method determines the correct worksheet based on the sheet name or index,
+     * ensuring that data is written to the intended location in the export template.
+     */
+    private function resolveWorksheet(): void
+    {
+        if (is_int($this->sheetName)) {
+            $this->spreadsheet->setActiveSheetIndex($this->sheetName);
+        } elseif (is_string($this->sheetName)) {
+            $this->spreadsheet->setActiveSheetIndexByName($this->sheetName);
         }
 
-        if (!isset($this->selectAttributeMap[$colMap[$col]][$value])) {
-            echo sprintf(
-                    "- Err0r: cant find label for field [%s] and value [%s].\n",
-                    $colMap[$col],
-                    $value
-                ) . PHP_EOL;
-
-            return $value;
-        }
-
-        if (!isset($this->selectAttributeMap[$colMap[$col]][$value][$this->detectedLang])) {
-            echo sprintf(
-                    "- Err0r: cant find label translation for field [%s], value [%s] and lang [%s].\n",
-                    $colMap[$col],
-                    $value,
-                    $this->detectedLang
-                ) . PHP_EOL;
-
-            return $value;
-        }
-
-        return $this->selectAttributeMap[$colMap[$col]][$value][$this->detectedLang];
+        $this->worksheet = $this->spreadsheet->getActiveSheet();
     }
 }

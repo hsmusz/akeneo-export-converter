@@ -10,5 +10,10 @@
     "psr-4": {
       "MoveCloser\\ExportConverterBundle\\": "src/MoveCloser/ExportConverterBundle/"
     }
+  },
+  "config": {
+    "allow-plugins": {
+      "symfony/flex": true
+    }
   }
 }

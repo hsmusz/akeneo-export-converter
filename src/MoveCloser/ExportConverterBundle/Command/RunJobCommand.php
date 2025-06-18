@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace MoveCloser\ExportConverterBundle\Command;
 
 use Akeneo\Tool\Bundle\BatchBundle\Job\JobInstanceRepository;
