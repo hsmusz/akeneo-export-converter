@@ -17,6 +17,10 @@ class Attributes
     ) {
     }
 
+    /**
+     * Multiplies a numeric value by a specified factor, if both operands are valid.
+     * Returns the original value if either operand is not set or invalid.
+     */
     public static function changeWeight(mixed $value, int|float $num): mixed
     {
         if (empty($value) || empty($num)) {
@@ -26,6 +30,9 @@ class Attributes
         return $value * $num;
     }
 
+    /**
+     * Removes all HTML tags and non-breaking space entities from the input text.
+     */
     public static function cleanText(mixed $value): string
     {
         $pattern = '/&nbsp;/';
@@ -35,16 +42,29 @@ class Attributes
         return strip_tags($result ?? '');
     }
 
-    public static function sayYes(mixed $value, string $needle, string $response): string
+    /**
+     * Determines if a specified substring is present in the input value and returns
+     * a configurable result for both positive and negative cases.
+     */
+    public static function sayYes(mixed $value, string $needle, string $yes, string $no = ''): string
     {
-        return str_contains($value ?? '', $needle) ? $response : '';
+        return str_contains($value ?? '', $needle) ? $yes : $no;
     }
 
+    /**
+     * Removes all HTML tags from the input and converts line break tags to newline characters,
+     * while also decoding HTML entities.
+     */
     public static function stripTagsAndBr2Nl(?string $value): string
     {
         return strip_tags(preg_replace('/<br\s?\/?>/ius', "\n", htmlspecialchars_decode($value ?? '')));
     }
 
+    /**
+     * Retrieves a localized label for a given attribute value based on the attribute identifier,
+     * value, and language code. Implements strict validation at each mapping step and returns the original value
+     * if any mapping or translation is missing.
+     */
     public function getMappedAttribute($columnIndex, mixed $value, string $language): mixed
     {
         if (!$this->has($columnIndex)) {
@@ -80,6 +100,11 @@ class Attributes
         return $this->map[$columnIndex][$value][$language];
     }
 
+    /**
+     * Checks for the existence of a specified path within the attribute mapping structure.
+     * Accepts a variable number of keys for deep validation, supporting checks for attributes,
+     * values, and translations.
+     */
     public function has(...$args): bool
     {
         $tmpMap = $this->generateMap();
@@ -93,6 +118,11 @@ class Attributes
         return true;
     }
 
+    /**
+     * Builds and caches a nested associative array representing the attribute mapping.
+     * Aggregates data from external sources, typically via API calls, and organizes it for efficient lookup.
+     * Ensures that the mapping is only generated once and remains consistent across method calls.
+     */
     private function generateMap(): array
     {
         if (empty($this->map)) {
@@ -117,6 +147,9 @@ class Attributes
         return $this->map;
     }
 
+    /**
+     * Executes a paginated API request to retrieve option data for a specified attribute.
+     */
     private function generateSelectAttributeMapApiCall($attribute, $limit, $page = 1)
     {
         $container = $this->kernel->getContainer();
