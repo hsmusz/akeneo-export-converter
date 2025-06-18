@@ -255,17 +255,17 @@ abstract class BaseTemplate
         if (empty($this->dataTypesMap)) {
             $map = [
                 'sku' => DataType::TYPE_STRING,
-                'ean-' . $this->detectedLang => DataType::TYPE_STRING,
+                mb_strtolower('ean-' . $this->detectedLang) => DataType::TYPE_STRING,
             ];
 
             foreach ($this->extendDataTypesMap() as $name => $type) {
-                $map[strtolower($name)] = $type;
+                $map[mb_strtolower($name)] = $type;
             }
 
             $this->dataTypesMap = $map;
         }
 
-        return $this->dataTypesMap[strtolower($col)] ?? null;
+        return $this->dataTypesMap[mb_strtolower($col)] ?? null;
     }
 
     /**
